@@ -89,7 +89,8 @@ cp "$PATCHED_DYLIB" "$NATIVE_PKG/libopentui.dylib"
 echo "== building opencode cli"
 (
   cd "$WORK/opencode/packages/cli"
-  OPENCODE_VERSION="$VERSION" OPENCODE_CHANNEL=latest BUN_COMPILE_RELEASE="bun-v$BUN_VERSION" \
+  # Compiles against the running bun, which is already the exact release opencode pins.
+  OPENCODE_VERSION="$VERSION" OPENCODE_CHANNEL=latest \
     bun run script/build.ts --single --target=opencode-darwin-arm64 --skip-install
 )
 
