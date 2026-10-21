@@ -47,6 +47,7 @@ ZIG_VERSION="$(sed -n 's/.*\.minimum_zig_version = "\([^"]*\)".*/\1/p' "$WORK/op
 echo "== bun $BUN_VERSION, zig $ZIG_VERSION"
 curl -fsSL -o "$TOOLS/bun.zip" "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/bun-darwin-aarch64.zip"
 unzip -q "$TOOLS/bun.zip" -d "$TOOLS"
+ln -sf bun "$TOOLS/bun-darwin-aarch64/bunx"
 curl -fsSL "https://ziglang.org/download/$ZIG_VERSION/zig-aarch64-macos-$ZIG_VERSION.tar.xz" | tar -xJ -C "$TOOLS"
 export PATH="$TOOLS/bun-darwin-aarch64:$TOOLS/zig-aarch64-macos-$ZIG_VERSION:$PATH"
 bun --version
