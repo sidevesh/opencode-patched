@@ -75,9 +75,10 @@ echo "== installing opencode dependencies"
 echo "== overlaying patched opentui"
 STORE="$WORK/opencode/node_modules/.bun"
 overlaid=0
+# The published package is core's dist/ directory, so its files sit at the package root.
 for dir in "$STORE"/@opentui+core@"$OPENTUI_VERSION"*/node_modules/@opentui/core; do
-  [ -d "$dir/dist" ] || continue
-  cp -R "$WORK/opentui/packages/core/dist/." "$dir/dist/"
+  [ -f "$dir/package.json" ] || continue
+  cp -R "$WORK/opentui/packages/core/dist/." "$dir/"
   overlaid=$((overlaid + 1))
 done
 [ "$overlaid" -gt 0 ] || { echo "::error::no installed @opentui/core@$OPENTUI_VERSION found to overlay"; exit 1; }
@@ -97,7 +98,10 @@ codesign --force --sign - "$BIN"
 codesign --verify "$BIN"
 reported="$("$BIN" --version)"
 [ "$reported" = "opencode v$VERSION" ] || { echo "::error::built binary reports '$reported', expected 'opencode v$VERSION'"; exit 1; }
-
+if grep -q "01-theme-mode-poll-fallback.patch\`: applied" "$OUT/patches.md" && ! grep -aq "themePollTimeoutId" "$BIN"; then
+  echo "::error::theme-mode poll fix is missing from the built binary"
+  exit 1
+fi
 cp "$BIN" "$OUT/opencode-darwin-arm64"
 (cd "$OUT" && shasum -a 256 opencode-darwin-arm64 >SHA256SUMS)
 jq -n --arg v "$VERSION" '{version: $v, metadata: {package: "@opencode/cli"}}' >"$OUT/update.json"
