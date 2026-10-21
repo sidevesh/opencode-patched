@@ -6,7 +6,7 @@ Stock [opencode](https://github.com/anomalyco/opencode) releases rebuilt with a 
 
 - `patches/opentui/01-theme-mode-poll-fallback.patch`: picks up light/dark appearance changes live on terminals that never send `CSI ?997`, such as iTerm2 (anomalyco/opentui#1733).
 - `patches/opentui/02-transparent-backdrop-alpha.patch`: keeps a fully transparent theme background transparent instead of rendering it opaque (anomalyco/opentui#1734).
-- `patches/opentui/03-markdown-list-restyle.patch`: recolors list bullets and list item text when the theme changes, instead of leaving them in the old theme's colors.
+- `patches/opentui/03-markdown-restyle-on-theme-change.patch`: recolors list bullets, list item text, tables and horizontal rules when the theme changes, instead of leaving them in the old theme's colors.
 - `patches/opencode/01-updater-use-fork-releases.patch`: points opencode's built-in update check and installer at this repo, so `opencode upgrade` and update notifications keep you on patched builds.
 
 When a patch lands upstream, the build detects it and skips it. If a patch stops applying, the build fails and nothing is published.
