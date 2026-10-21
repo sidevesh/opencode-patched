@@ -1,0 +1,97 @@
+name: build
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "opencode version to build (empty = latest upstream release)"
+        required: false
+      force:
+        description: "Rebuild even if a release for this version exists"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      build: ${{ steps.resolve.outputs.build }}
+      latest: ${{ steps.resolve.outputs.latest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          upstream="$(curl -fsSL 'https://opencode.ai/update/api/latest/cli/npm?current=0.0.0' | jq -r .version)"
+          version="${INPUT_VERSION:-$upstream}"
+          version="${version#v}"
+          echo "upstream latest: $upstream, building: $version"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "latest=$([ "$version" = "$upstream" ] && echo true || echo false)" >>"$GITHUB_OUTPUT"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && [ "$FORCE" != "true" ]; then
+            echo "release v$version already exists"
+            echo "build=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "build=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      # GitHub disables scheduled workflows after 60 days without repository activity.
+      - name: Keep schedule alive
+        run: |
+          last="$(git log -1 --format=%ct)"
+          if [ $(( $(date +%s) - last )) -gt $(( 45 * 24 * 3600 )) ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "chore: keep scheduled builds alive"
+            git push
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/build.sh "${{ needs.check.outputs.version }}"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+          LATEST: ${{ needs.check.outputs.latest }}
+        run: |
+          {
+            echo "opencode [v$VERSION](https://github.com/anomalyco/opencode/releases/tag/v$VERSION) with opentui v$(cat dist/opentui-version), plus:"
+            echo
+            cat dist/patches.md
+            echo
+            echo "Install or update: \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | bash\`"
+          } >notes.md
+          assets=(dist/opencode-darwin-arm64 dist/SHA256SUMS dist/update.json)
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "${assets[@]}" --clobber
+            gh release edit "v$VERSION" --notes-file notes.md
+          else
+            gh release create "v$VERSION" "${assets[@]}" --title "opencode $VERSION (patched)" --notes-file notes.md --latest="$LATEST"
+          fi

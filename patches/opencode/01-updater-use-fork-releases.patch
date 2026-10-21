@@ -1,0 +1,24 @@
+diff --git a/packages/cli/src/services/updater.ts b/packages/cli/src/services/updater.ts
+index 736e8f8..c46e468 100644
+--- a/packages/cli/src/services/updater.ts
++++ b/packages/cli/src/services/updater.ts
+@@ -281,7 +281,7 @@ const make = Effect.gen(function* () {
+         fetch(
+           core
+             ? "https://formulae.brew.sh/api/formula/opencode.json"
+-            : `https://opencode.ai/update/api/${encodeURIComponent(channel)}/${encodeURIComponent(OPENCODE_ARTIFACT)}/${distribution}?current=${encodeURIComponent(OPENCODE_VERSION)}`,
++            : "https://github.com/sidevesh/opencode-patched/releases/latest/download/update.json",
+           {
+             signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+           },
+@@ -479,8 +479,8 @@ const make = Effect.gen(function* () {
+           const installer = path.join(directory, "install")
+           yield* runUpgrade({
+             method,
+-            command: ["curl", "-fsSL", "-o", installer, "https://opencode.ai/v2/install"],
+-            displayCommand: ["curl", "-fsSL", "https://opencode.ai/v2/install"],
++            command: ["curl", "-fsSL", "-o", installer, "https://raw.githubusercontent.com/sidevesh/opencode-patched/main/install.sh"],
++            displayCommand: ["curl", "-fsSL", "https://raw.githubusercontent.com/sidevesh/opencode-patched/main/install.sh"],
+             title: "Could not download the OpenCode installer",
+             retry: "Check your network, then run opencode upgrade again.",
+           })
