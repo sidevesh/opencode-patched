@@ -1,0 +1,13 @@
+diff --git a/packages/tui/src/plugin/api.tsx b/packages/tui/src/plugin/api.tsx
+index 35a4eac..67622ba 100644
+--- a/packages/tui/src/plugin/api.tsx
++++ b/packages/tui/src/plugin/api.tsx
+@@ -160,7 +160,7 @@ export function createPluginContext(input: {
+     data: host.data,
+     attention: host.attention,
+     get theme() {
+-      return host.themes.currentTokens()
++      return host.themes.current
+     },
+     get themeMode() {
+       return host.themes.mode()
