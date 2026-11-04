@@ -45,8 +45,13 @@ jobs:
           echo "upstream latest: $upstream, building: $version"
           echo "version=$version" >>"$GITHUB_OUTPUT"
           echo "latest=$([ "$version" = "$upstream" ] && echo true || echo false)" >>"$GITHUB_OUTPUT"
+          failed="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label build-failure --json body -q '.[0].body')"
           if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && [ "$FORCE" != "true" ]; then
             echo "release v$version already exists"
+            echo "build=false" >>"$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = schedule ] && printf '%s' "$failed" | grep -qF "<!-- failed: v$version @ $GITHUB_SHA -->"; then
+            # Same version and same commit already failed; retrying would only fail again.
+            echo "v$version already failed at $GITHUB_SHA, waiting for a fix or a new upstream release"
             echo "build=false" >>"$GITHUB_OUTPUT"
           else
             echo "build=true" >>"$GITHUB_OUTPUT"
@@ -112,10 +117,14 @@ jobs:
         run: |
           gh label create build-failure --repo "$GITHUB_REPOSITORY" --color B60205 --force >/dev/null
           open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label build-failure --json number -q '.[0].number')"
+          body="The build failed, so no patched release was published. Most likely a patch no longer applies to the new upstream version. Scheduled runs won't retry until main changes or a new opencode version comes out. Log: $RUN_URL
+
+          <!-- failed: v$VERSION @ $GITHUB_SHA -->"
           if [ "$FAILED" = true ] && [ -z "$open" ]; then
             gh issue create --repo "$GITHUB_REPOSITORY" --label build-failure \
-              --title "Build failing for opencode v$VERSION" \
-              --body "The scheduled build failed, so no patched release was published. Most likely a patch no longer applies to the new upstream version. Log: $RUN_URL"
+              --title "Build failing for opencode v$VERSION" --body "$body"
+          elif [ "$FAILED" = true ]; then
+            gh issue edit "$open" --repo "$GITHUB_REPOSITORY" --title "Build failing for opencode v$VERSION" --body "$body"
           elif [ "$BUILT" = true ] && [ -n "$open" ]; then
             gh issue close "$open" --repo "$GITHUB_REPOSITORY" --comment "Fixed: opencode v$VERSION built and published in $RUN_URL"
           fi
