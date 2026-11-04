@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: build
@@ -94,4 +95,27 @@ jobs:
             gh release edit "v$VERSION" --notes-file notes.md
           else
             gh release create "v$VERSION" "${assets[@]}" --title "opencode $VERSION (patched)" --notes-file notes.md --latest="$LATEST"
+          fi
+
+  # Failed builds publish nothing, so surface them as an issue (GitHub notifies the repo owner).
+  report:
+    needs: [check, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED: ${{ needs.check.result == 'failure' || needs.build.result == 'failure' }}
+          BUILT: ${{ needs.build.result == 'success' }}
+          VERSION: ${{ needs.check.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create build-failure --repo "$GITHUB_REPOSITORY" --color B60205 --force >/dev/null
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label build-failure --json number -q '.[0].number')"
+          if [ "$FAILED" = true ] && [ -z "$open" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --label build-failure \
+              --title "Build failing for opencode v$VERSION" \
+              --body "The scheduled build failed, so no patched release was published. Most likely a patch no longer applies to the new upstream version. Log: $RUN_URL"
+          elif [ "$BUILT" = true ] && [ -n "$open" ]; then
+            gh issue close "$open" --repo "$GITHUB_REPOSITORY" --comment "Fixed: opencode v$VERSION built and published in $RUN_URL"
           fi

@@ -1,23 +1,20 @@
 diff --git a/packages/core/src/renderer-theme-mode.ts b/packages/core/src/renderer-theme-mode.ts
-index 419d9abc7..81d865c61 100644
+index 342af8e..9cbd7f9 100644
 --- a/packages/core/src/renderer-theme-mode.ts
 +++ b/packages/core/src/renderer-theme-mode.ts
-@@ -42,12 +42,14 @@ type ThemeWaiter = {
+@@ -42,9 +42,11 @@ type ThemeWaiter = {
  
  export class RendererThemeMode {
    private static readonly QUERY_TIMEOUT_MS = 250
 +  private static readonly POLL_INTERVAL_MS = 3000
  
    private _themeMode: ThemeMode | null = null
-   private themeQueryPending = true
-   private themeOscForeground: string | null = null
-   private themeOscBackground: string | null = null
    private themeRefreshTimeoutId: TimerHandle | null = null
 +  private themePollTimeoutId: TimerHandle | null = null
    private waiters = new Set<ThemeWaiter>()
  
    constructor(
-@@ -95,6 +97,11 @@ export class RendererThemeMode {
+@@ -82,6 +84,11 @@ export class RendererThemeMode {
    public dispose(): void {
      this.cancelRefresh()
  
@@ -29,15 +26,15 @@ index 419d9abc7..81d865c61 100644
      for (const waiter of this.waiters) {
        if (waiter.timeoutHandle !== null) {
          this.clock.clearTimeout(waiter.timeoutHandle)
-@@ -157,6 +164,20 @@ export class RendererThemeMode {
-   private completeThemeQuery(): void {
-     this.clearThemeRefreshTimeout()
-     this.themeQueryPending = false
+@@ -115,9 +122,23 @@ export class RendererThemeMode {
+     }
+ 
+     this.cancelRefresh()
 +    this.schedulePoll()
-+  }
-+
-+  // Terminals that never send CSI ?997 (e.g. iTerm2) would otherwise never
-+  // re-check after the first query, so poll as a fallback.
+     return { handled, changedMode: this.applyThemeMode(inferThemeModeFromBackgroundColor(background)) }
+   }
+ 
++  // Terminals behind tmux -CC never send CSI ?997, so keep re-querying once the terminal has answered.
 +  private schedulePoll(): void {
 +    if (this.themePollTimeoutId !== null) {
 +      return
@@ -46,7 +43,10 @@ index 419d9abc7..81d865c61 100644
 +    this.themePollTimeoutId = this.clock.setTimeout(() => {
 +      this.themePollTimeoutId = null
 +      this.requestThemeOscColors()
++      this.schedulePoll()
 +    }, RendererThemeMode.POLL_INTERVAL_MS)
-   }
- 
-   private requestThemeOscColors(): void {
++  }
++
+   public cancelRefresh(): void {
+     if (this.themeRefreshTimeoutId === null) {
+       return
