@@ -71,7 +71,15 @@ jobs:
   build:
     needs: check
     if: needs.check.outputs.build == 'true'
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-15
+          - platform: linux-x64
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +87,26 @@ jobs:
       - name: Build
         env:
           GH_TOKEN: ${{ github.token }}
+          PLATFORM: ${{ matrix.platform }}
         run: scripts/build.sh "${{ needs.check.outputs.version }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+
+  # Publishes whichever platforms built, so one failing platform doesn't hold back the other.
+  publish:
+    needs: [check, build]
+    if: ${{ !cancelled() && needs.check.outputs.build == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
 
       - name: Publish release
         env:
@@ -87,31 +114,34 @@ jobs:
           VERSION: ${{ needs.check.outputs.version }}
           LATEST: ${{ needs.check.outputs.latest }}
         run: |
+          set -euo pipefail
+          ls dist/opencode-* >/dev/null  # fails when no platform built
+          cat dist/SHA256SUMS-* >dist/SHA256SUMS
           {
             echo "opencode [v$VERSION](https://github.com/anomalyco/opencode/releases/tag/v$VERSION) with opentui v$(cat dist/opentui-version), plus:"
             echo
-            cat dist/patches.md
+            sort -u dist/patches.md
             echo
             echo "Install or update: \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | bash\`"
           } >notes.md
-          assets=(dist/opencode-darwin-arm64 dist/SHA256SUMS dist/update.json)
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            gh release upload "v$VERSION" "${assets[@]}" --clobber
-            gh release edit "v$VERSION" --notes-file notes.md
+          assets=(dist/opencode-* dist/SHA256SUMS dist/update.json)
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "v$VERSION" --notes-file notes.md --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "v$VERSION" "${assets[@]}" --title "opencode $VERSION (patched)" --notes-file notes.md --latest="$LATEST"
+            gh release create "v$VERSION" "${assets[@]}" --title "opencode $VERSION (patched)" --notes-file notes.md --latest="$LATEST" --repo "$GITHUB_REPOSITORY"
           fi
 
   # Failed builds publish nothing, so surface them as an issue (GitHub notifies the repo owner).
   report:
-    needs: [check, build]
+    needs: [check, build, publish]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
-          FAILED: ${{ needs.check.result == 'failure' || needs.build.result == 'failure' }}
-          BUILT: ${{ needs.build.result == 'success' }}
+          FAILED: ${{ needs.check.result == 'failure' || needs.build.result == 'failure' || needs.publish.result == 'failure' }}
+          BUILT: ${{ needs.build.result == 'success' && needs.publish.result == 'success' }}
           VERSION: ${{ needs.check.outputs.version }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |

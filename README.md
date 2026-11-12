@@ -1,6 +1,6 @@
 # opencode-patched
 
-Stock [opencode](https://github.com/anomalyco/opencode) releases rebuilt with a few fixes that aren't upstream yet. A scheduled workflow checks for a new opencode release every 6 hours, applies the patches, builds a macOS arm64 binary and publishes it here under the same version number.
+Stock [opencode](https://github.com/anomalyco/opencode) releases rebuilt with a few fixes that aren't upstream yet. A scheduled workflow checks for a new opencode release every 6 hours, applies the patches, builds macOS arm64 and Linux x64 binaries and publishes them here under the same version number.
 
 ## Patches
 

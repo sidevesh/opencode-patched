@@ -15,10 +15,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ "$(uname -s)" != "Darwin" ] || [ "$(uname -m)" != "arm64" ]; then
-  echo "Only macOS arm64 builds are published." >&2
-  exit 1
-fi
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) platform="darwin-arm64" ;;
+  Linux-x86_64) platform="linux-x64" ;;
+  *) echo "Only macOS arm64 and Linux x64 builds are published." >&2; exit 1 ;;
+esac
 
 if [ -z "$version" ]; then
   version="$(curl -fsSL "https://github.com/$REPO/releases/latest/download/update.json" | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p')"
@@ -32,9 +33,9 @@ mkdir -p "$bin_dir"
 
 tmp="$(mktemp "$bin_dir/.opencode.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
-curl -fsSL -o "$tmp" "$base/opencode-darwin-arm64"
-expected="$(curl -fsSL "$base/SHA256SUMS" | awk '$2 == "opencode-darwin-arm64" { print $1 }')"
-actual="$(shasum -a 256 "$tmp" | awk '{ print $1 }')"
+curl -fsSL -o "$tmp" "$base/opencode-$platform"
+expected="$(curl -fsSL "$base/SHA256SUMS" | awk -v f="opencode-$platform" '$2 == f { print $1 }')"
+actual="$({ shasum -a 256 "$tmp" 2>/dev/null || sha256sum "$tmp"; } | awk '{ print $1 }')"
 if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
   echo "Checksum mismatch for opencode $version." >&2
   exit 1
